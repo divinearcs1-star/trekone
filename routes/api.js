@@ -33,11 +33,54 @@ async function getConnection(dbName) {
 }
 
 router.get('/trek/:dbname/:tablename', async (req, res) => {
-  let dbName = req.params.dbname;
-  const db = await getConnection(dbName);
-  let tableName = req.params.tablename;
-  const data = await db.collection(tableName).find({}).toArray();
-  res.json(data);
+  try {
+    let dbName = req.params.dbname;
+    const db = await getConnection(dbName);
+    let tableName = req.params.tablename;
+    const data = await db.collection(tableName).find({}).toArray();
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching treks' });
+  }
+});
+
+router.get('/filtertrek/:dbname/:tablename', async (req, res) => {
+  try {
+    let dbName = req.params.dbname;
+    const db = await getConnection(dbName);
+    let tableName = req.params.tablename;
+
+    const today = new Date().toISOString().split("T")[0];
+
+    const data = await db.collection(tableName).find({
+      eventdate: {
+        $elemMatch: { $gte: today }
+      }
+    }).toArray();
+    // console.log("filetr date", data.length);
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching filter treks' });
+  }
+});
+
+router.get('/specialtrek/:dbname/:tablename', async (req, res) => {
+  try {
+    let dbName = req.params.dbname;
+    const db = await getConnection(dbName);
+    let tableName = req.params.tablename;
+
+    const data = await db.collection(tableName).find({
+      specialEvent: true
+    }).toArray();
+    // console.log("filetr date", data.length);
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching special treks' });
+  }
 });
 
 router.post('/login/:dbname/:collectionname', async (req, res) => {
@@ -72,78 +115,89 @@ router.post('/login/:dbname/:collectionname', async (req, res) => {
 })
 
 router.post('/register', async (req, res) => {
-  console.log("Inside register");
-  const userData = req.body;
-  const hashedPassword = await bcrypt.hash(userData.password, 10);
-  userData.password = hashedPassword;
-  console.log("going to db");
-  const db = await getConnection('UserAdmin');
-  const checkeddata = await db.collection('Users').findOne({ email: userData.email });
-  if (checkeddata) {
-    console.log("user present");
-    return res.status(409).json({ status: 'warning', message: 'User already exist' });
-  }
-  else {
-    await db.collection('Users').insertOne(userData);
-    console.log("data inserted");
-    return res.status(200).json({ status: 'success', message: 'User Registered Successfully' });
+
+  try {
+    console.log("Inside register");
+    const userData = req.body;
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    userData.password = hashedPassword;
+    // console.log("going to db");
+    const db = await getConnection('UserAdmin');
+    const checkeddata = await db.collection('Users').findOne({ email: userData.email });
+    if (checkeddata) {
+      console.log("user present");
+      return res.status(409).json({ status: 'warning', message: 'User already exist' });
+    }
+    else {
+      await db.collection('Users').insertOne(userData);
+      console.log("data inserted");
+      return res.status(200).json({ status: 'success', message: 'User Registered Successfully' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching filter treks' });
   }
 });
 
 router.post('/booking/:dbname/:collectionname', async (req, res) => {
-  console.log("Inside booking");
-  const bookingData = req.body;
-  let dbName = req.params.dbname;
-  let collectionName = req.params.collectionname;
-  if (bookingData.customername) {
-    console.log("customername present");
-    const db = await getConnection(dbName);
-    console.log("collectionName present");
+  try {
+    console.log("Inside booking");
+    const bookingData = req.body;
+    let dbName = req.params.dbname;
+    let collectionName = req.params.collectionname;
+    if (bookingData.customername) {
+      console.log("customername present");
+      const db = await getConnection(dbName);
+      console.log("collectionName present");
 
-    const now = new Date();
-    const orderId = 'TRK' + now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + Date.now().toString().slice(-6);
-    // console.log(orderId);
+      const now = new Date();
+      const orderId = 'TRK' + now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + Date.now().toString().slice(-6);
+      // console.log(orderId);
 
-    bookingData.paymentstatus = "pending"
-    bookingData.bookingid = orderId;
-    bookingData.orderid = "";
-    bookingData.paymentid = "";
-    bookingData.paymentdate = "";
-    bookingData.bookingdate = new Date();
-    bookingData.paymentvia = "Razorpay";
-    await db.collection(collectionName).insertOne(bookingData);
-    console.log("data inserted");
-    //  return res.status(200).json({ status: '200', message: 'Booking Successfull' });
+      bookingData.paymentstatus = "pending"
+      bookingData.bookingid = orderId;
+      bookingData.orderid = "";
+      bookingData.paymentid = "";
+      bookingData.paymentdate = "";
+      bookingData.bookingdate = new Date();
+      bookingData.paymentvia = "Razorpay";
+      await db.collection(collectionName).insertOne(bookingData);
+      console.log("data inserted");
+      //  return res.status(200).json({ status: '200', message: 'Booking Successfull' });
 
-    const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET
-    });
-
-    // console.log(" key id= " + key_id);
-    try {
-      const amount = bookingData.amount;
-      const options = {
-        amount: amount * 100, // paisa
-        currency: 'INR',
-        receipt: 'receipt_' + Date.now()
-      };
-      console.log("creating order");
-      const order = await razorpay.orders.create(options);
-      order.bookingid = bookingData.bookingid;
-      //console.log(JSON.stringify(order, null, 2));
-      res.status(200).json(order);
-    }
-    catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        message: error.message
+      const razorpay = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET
       });
+
+      // console.log(" key id= " + key_id);
+      try {
+        const amount = bookingData.amount;
+        const options = {
+          amount: amount * 100, // paisa
+          currency: 'INR',
+          receipt: 'receipt_' + Date.now()
+        };
+        console.log("creating order");
+        const order = await razorpay.orders.create(options);
+        order.bookingid = bookingData.bookingid;
+        //console.log(JSON.stringify(order, null, 2));
+        res.status(200).json(order);
+      }
+      catch (error) {
+        console.error(error);
+        res.status(500).json({
+          success: false,
+          message: error.message
+        });
+      }
     }
-  }
-  else {
-    res.status(501).json({ status: '501', message: 'Invalid data' });
+    else {
+      res.status(501).json({ status: '501', message: 'Invalid data' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error while booking' });
   }
 });
 
@@ -168,7 +222,7 @@ router.post('/verifypayment/:dbname/:collectionname/:bookid', async (req, res) =
         message: 'Invalid Signature'
       });
     }
- 
+
     const db = await getConnection(dbName);
     // console.log("collectionName present");
     const result = await db.collection(collectionName).updateOne(
@@ -177,8 +231,8 @@ router.post('/verifypayment/:dbname/:collectionname/:bookid', async (req, res) =
         $set: {
           paymentstatus: "Paid",
           paymentdate: new Date(),
-          orderid : razorpay_order_id,
-          paymentid : razorpay_payment_id
+          orderid: razorpay_order_id,
+          paymentid: razorpay_payment_id
         }
       }
     );

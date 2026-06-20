@@ -11,8 +11,8 @@ app.use(cors());
 
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin",
-        // "http://localhost:4200");
-         "http://trekone.s3-website.ap-south-1.amazonaws.com");
+         "http://localhost:4200");
+        // "http://trekone.s3-website.ap-south-1.amazonaws.com");
     next();
 });
 
