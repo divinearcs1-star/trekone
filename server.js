@@ -9,12 +9,19 @@ const port = process.env.PORT || '3000';
 
 app.use(cors());
 
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin",
-         "http://localhost:4200");
-        // "http://trekone.s3-website.ap-south-1.amazonaws.com");
-    next();
-});
+// app.use((req, res, next) => {
+//     res.header("Access-Control-Allow-Origin",
+//      //    "http://localhost:4200");
+//          "http://trekone.s3-website.ap-south-1.amazonaws.com");
+//     next();
+// });
+
+app.use(cors({
+    origin: [
+        "https://trekone.netlify.app",
+        "http://trekone.s3-website.ap-south-1.amazonaws.com"
+    ]
+}));
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
