@@ -2,7 +2,7 @@
   "name": "trekone-api",
   "version": "1.0.0",
   "main": "server.js",
-   "engines": {
+  "engines": {
     "node": "20.20.2"
   },
   "scripts": {
@@ -20,6 +20,7 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.3",
+    "nodemailer": "^9.0.1",
     "razorpay": "^2.9.6"
   }
 }

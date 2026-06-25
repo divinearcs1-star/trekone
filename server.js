@@ -2,7 +2,9 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const cors = require('cors')
 const path = require('path');
-const api = require('./routes/api')
+const apiRoute = require('./routes/api')
+const authRoutes = require('./routes/auth');
+const paymentRoutes = require('./routes/payment');
 
 const app = express();
 const port = process.env.PORT || '3000';
@@ -25,9 +27,17 @@ app.use(cors({
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
-app.use(bodyParser.json());     // used when db data in json format
+app.use('/api/razorpay/webhook', express.raw({ type: 'application/json' }));
+//app.use(bodyParser.json());     // used when db data in json format
+app.use(express.json());
 
-app.use('/api', api);
+app.use((err, req, res, next) => {
+    console.error("Global Error:", err.message);
+    res.status(400).json({ error: err.message });
+});
+app.use('/api', apiRoute);
+app.use('/auth', authRoutes);
+app.use('/payment', paymentRoutes);
 
 app.listen(port, function() {
     console.log("server running on port " + port)});
