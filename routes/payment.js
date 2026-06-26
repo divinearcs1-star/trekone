@@ -1,97 +1,16 @@
 require('dotenv').config();
 const express = require('express');
 const router = express.Router();   // Create route handler
-const mongoose = require('mongoose');  // MongoDB library
-const User = require('../models/user');  // User collection model
-const Freetrek = require('../models/freetrek');
-const Paidtrek = require('../models/paidtrek');
 const Booking = require('../models/booking');
 const WebhookLog = require('../models/webhookLog');
-const jwt = require('jsonwebtoken')
-
-const db = process.env.MONGO_URI
-const bcrypt = require('bcrypt');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const { sendMail } = require('../services/emailService');
-
-mongoose.connect(db)
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.log(err));
-
-router.post('/booking', async (req, res) => {
-  try {
-    console.log("Inside booking");
-    const bookingData = req.body;
-
-    if (bookingData.customername) {
-      const now = new Date();
-      const orderId = 'TRK' + now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + Date.now().toString().slice(-6);
-      // console.log(orderId);
-
-      bookingData.paymentstatus = "pending"
-      bookingData.bookingid = orderId;
-      bookingData.orderid = "";
-      bookingData.paymentid = "";
-      bookingData.paymentdate = "";
-      bookingData.bookingdate = new Date();
-      bookingData.paymentvia = "Razorpay";
-
-      const newBooking = new Booking(bookingData);
-      await newBooking.save();
-      console.log("booking inserted");
-
-      const razorpay = new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID,
-        key_secret: process.env.RAZORPAY_KEY_SECRET
-      });
-      // console.log(" key id= " + key_id);
-      try {
-        const amount = bookingData.amount;
-        const options = {
-          amount: amount * 100, // paisa
-          currency: 'INR',
-          receipt: 'receipt_' + Date.now()
-        };
-        console.log("creating order");
-        const order = await razorpay.orders.create(options);
-
-        // update order id in booking collection
-        const result = await Booking.updateOne(
-          { bookingid: bookingData.bookingid },
-          {
-            $set: {
-              orderid: order.id
-            }
-          }
-        );
-        if (result.matchedCount === 0) {
-          return res.status(404).json({ message: "Booking not found" });
-        }
-        order.bookingid = bookingData.bookingid;
-        res.status(200).json(order);
-      }
-      catch (error) {
-        console.error(error);
-        res.status(500).json({
-          success: false,
-          message: error.message
-        });
-      }
-    }
-    else {
-      res.status(501).json({ status: '501', message: 'Invalid data' });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error while booking' });
-  }
-});
+const verifyToken = require('../middlewares/auth');
 
 router.post('/verifypayment', async (req, res) => {
   console.log("Inside verify");
-  // const bookingData = req.body;
+
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     const body = razorpay_order_id + "|" + razorpay_payment_id;
@@ -184,6 +103,11 @@ router.post('/razorpay/webhook', async (req, res) => {
       const booking = await Booking.findOne({
         orderid: payment.order_id
       });
+      if (!booking) {
+        return res.status(404).json({
+          message: "Booking not found"
+        });
+      }
       const htmlContent = `
     <h1>Booking Confirmed 🎉</h1>
     <p>Hello ${booking.customername},</p>
@@ -229,13 +153,18 @@ router.post('/razorpay/webhook', async (req, res) => {
       const booking = await Booking.findOne({
         paymentid: refund.payment_id
       });
+      if (!booking) {
+        return res.status(404).json({
+          message: "Booking not found"
+        });
+      }
       const htmlContent = `
     <h2>Refund Completed</h2>
     <p>Hello ${booking.customername},</p>
     <p>Your refund has been successfully processed.</p>
     <p><b>Booking ID:</b> ${booking.bookingid}</p>
     <p><b>Refund ID:</b> ${refund.id}</p>
-    <p><b>Refund Amount:</b> ₹${refund.amount}</p>
+    <p><b>Refund Amount:</b> ₹${refund.amount / 100}</p>
     <p>Refund will reflect in your account within 5-7 business days.</p>
     <br/>
     <p>Team TrekOne</p>`;
@@ -249,7 +178,7 @@ router.post('/razorpay/webhook', async (req, res) => {
   }
 });
 
-router.post('/refund/:paymentid', async (req, res) => {
+router.post('/refund/:paymentid', verifyToken, async (req, res) => {
   try {
     console.log("inside refund");
     const razorpay = new Razorpay({
@@ -258,6 +187,13 @@ router.post('/refund/:paymentid', async (req, res) => {
     });
     const paymentid = req.params.paymentid;
     console.log("amount", req.body.amount);
+
+    const booking = await Booking.findOne({ paymentid, email: req.email });
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found"
+      });
+    }
     const refund = await razorpay.payments.refund(paymentid, {
       amount: req.body.amount * 100   // optional (paisa)
     });
@@ -275,12 +211,12 @@ router.post('/refund/:paymentid', async (req, res) => {
   }
 });
 
-router.post('/cancel-refund', async (req, res) => {
+router.post('/cancel-refund', verifyToken, async (req, res) => {
   try {
     console.log("inside cancel & refund");
     const { bookingid, paymentid, amount } = req.body;
     // Find booking
-    const booking = await Booking.findOne({ bookingid });
+    const booking = await Booking.findOne({ bookingid, email: req.email });
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -292,6 +228,12 @@ router.post('/cancel-refund', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Already refunded'
+      });
+    }
+    if (booking.bookingstatus === "Cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Booking already cancelled"
       });
     }
     if (booking.paymentstatus !== "Paid") {
@@ -348,56 +290,6 @@ router.post('/cancel-refund', async (req, res) => {
       success: false,
       message: 'Refund failed',
       error: error.message
-    });
-  }
-});
-
-router.post('/cancel-booking', async (req, res) => {
-  try {
-    console.log("inside cancel booking");
-    const { bookingid } = req.body;
-    const booking = await Booking.findOne({ bookingid });
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-    if (booking.paymentstatus === "Refunded") {
-      return res.status(400).json({
-        success: false,
-        message: "Booking already refunded"
-      });
-    }
-    if (booking.bookingstatus === "Cancelled") {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking already cancelled'
-      });
-    }
-    booking.bookingstatus = "Cancelled";
-    await booking.save();
-    //
-    const htmlContent = `
-    <h2>Booking Cancelled</h2>
-    <p>Hello ${booking.customername},</p>
-    <p>Your trek booking has been cancelled successfully.</p>
-    <p><b>Booking ID:</b> ${booking.bookingid}</p>
-    <p><b>Trek Date:</b> ${booking.eventdate}</p>
-    <p>No refund has been initiated for this booking.</p>
-    <br/>
-    <p>Team TrekOne</p>`;
-    await sendMail(booking.email, "TrekOne Booking Cancelled", htmlContent);
-    //
-    res.status(200).json({
-      success: true,
-      message: 'Booking cancelled successfully'
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      message: 'Cancellation failed'
     });
   }
 });

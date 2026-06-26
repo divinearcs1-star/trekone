@@ -15,7 +15,15 @@ const userSchema = new Schema({
     phone: Number,
     city: String,
     resetToken: String,
-    resetTokenExpiry: Date
+    resetTokenExpiry: Date,
+    refreshToken: {
+        type: String,
+        default: null
+    },
+    role: {
+        type: String,
+        default: "user"
+    }
 });
 
 module.exports = mongoose.model('user', userSchema, 'users');
