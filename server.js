@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const paymentRoutes = require('./routes/payment');
 const bookingRoutes = require('./routes/booking');
 const trekRoutes = require('./routes/trek');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const port = process.env.PORT || '3000';
@@ -33,15 +34,16 @@ app.use('/api/razorpay/webhook', express.raw({ type: 'application/json' }));
 //app.use(bodyParser.json());     // used when db data in json format
 app.use(express.json());
 
-app.use((err, req, res, next) => {
-    console.error("Global Error:", err.message);
-    res.status(400).json({ error: err.message });
-});
+// app.use((err, req, res, next) => {
+//     console.error("Global Error:", err.message);
+//     res.status(400).json({ error: err.message });
+// });
 app.use('/api', apiRoute);
 app.use('/auth', authRoutes);
 app.use('/payment', paymentRoutes);
 app.use('/booking', bookingRoutes);
 app.use('/trek', trekRoutes);
+app.use('/admin', adminRoutes);
 
 app.listen(port, function () {
     console.log("server running on port " + port)

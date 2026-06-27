@@ -17,6 +17,12 @@ router.post('/login', async (req, res) => {
       console.log("entered in login method");
       const data = await User.findOne({ email: userData.email });
       if (data) {
+        if (data.status === 'blocked') {
+          return res.status(403).json({
+            success: false,
+            message: 'Your account has been blocked'
+          });
+        }
         const isMatch = await bcrypt.compare(userData.password, data.password);
         if (isMatch) {
           console.log("Login Success");
@@ -88,6 +94,11 @@ router.post('/refresh-token', async (req, res) => {
     if (!user) {
       return res.status(403).send("Invalid refresh token");
     }
+    if (user.status === 'blocked') {
+      return res.status(403).json({
+        message: 'Account blocked'
+      });
+    }
     jwt.verify(
       refreshToken,
       process.env.REFRESH_SECRET,
@@ -104,7 +115,7 @@ router.post('/refresh-token', async (req, res) => {
           process.env.JWT_SECRET,
           { expiresIn: '15m' }
         );
-        console.log("new accesstoken: ", newAccessToken)
+        // console.log("new accesstoken: ", newAccessToken)
         const newRefreshToken = jwt.sign(
           {
             email: user.email,

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 
 const Schema = mongoose.Schema;
 
-const paidtrekSchema = new Schema({
+const himalayatrekSchema = new Schema({
     eventname: String,
     description: String,
     eventdate: [String],
@@ -39,9 +39,12 @@ const paidtrekSchema = new Schema({
         default: false
     },
     createdAt: {
-    type: Date,
-    default: Date.now
-  }
+        type: Date,
+        default: Date.now
+    }, isActive: {
+        type: Boolean,
+        default: true
+    }
 });
 
-module.exports = mongoose.model('paidtrek', paidtrekSchema, 'paidtreks');
+module.exports = mongoose.model('himalayatrek', himalayatrekSchema, 'himalayatreks');

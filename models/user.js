@@ -23,6 +23,18 @@ const userSchema = new Schema({
     role: {
         type: String,
         default: "user"
+    },
+    isBlocked: {
+        type: Boolean,
+        default: false
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    status: {
+        type: String,
+        default: 'active'
     }
 });
 

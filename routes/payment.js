@@ -279,6 +279,19 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
     booking.refunddate = new Date();
     await booking.save();
 
+    //  upadte seats available
+    await Mhtrek.updateOne(
+      {
+        eventname: booking.eventname
+      },
+      {
+        $inc: {
+          availableSeats: booking.noofpersons
+        }
+      }
+    );
+    //  forgot to send mail
+
     res.status(200).json({
       success: true,
       message: 'Refund successful',

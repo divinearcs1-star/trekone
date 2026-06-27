@@ -6,13 +6,26 @@ const Booking = require('../models/booking');
 const Razorpay = require('razorpay');
 const { sendMail } = require('../services/emailService');
 const verifyToken = require('../middlewares/auth');
-// const jsPDF = require('jspdf');
-// const autoTable = require('jspdf-autotable');
+const Mhtrek = require('../models/mhtrek');
+const Himalayatrek = require('../models/himalayatrek');
 
 router.post('/create-Order', async (req, res) => {
   try {
     console.log("Inside booking");
     const bookingData = req.body;
+
+    //  prevent overbooking
+    const trek = await Mhtrek.findOne({
+      eventname: bookingData.eventname
+    });
+
+    if (trek.availableSeats < bookingData.noofpersons) {
+      return res.status(400).json({
+        success: false,
+        message: "Not enough seats"
+      });
+    }
+    //
 
     if (bookingData.customername) {
       const now = new Date();
@@ -30,6 +43,19 @@ router.post('/create-Order', async (req, res) => {
       const newBooking = new Booking(bookingData);
       await newBooking.save();
       console.log("booking inserted");
+
+      //  booking seat manage
+      await Mhtrek.updateOne(
+        {
+          eventname: bookingData.eventname
+        },
+        {
+          $inc: {
+            availableSeats: -bookingData.noofpersons
+          }
+        }
+      );
+      //
 
       const razorpay = new Razorpay({
         key_id: process.env.RAZORPAY_KEY_ID,
@@ -103,6 +129,20 @@ router.post('/cancel-booking', verifyToken, async (req, res) => {
     }
     booking.bookingstatus = "Cancelled";
     await booking.save();
+
+    //  update seats available
+    await Mhtrek.updateOne(
+      {
+        eventname: booking.eventname
+      },
+      {
+        $inc: {
+          availableSeats: booking.noofpersons
+        }
+      }
+    );
+    //
+
     //
     const htmlContent = `
     <h2>Booking Cancelled</h2>
@@ -148,69 +188,5 @@ router.get('/mybookings/:email', verifyToken, async (req, res) => {
   }
 });
 
-// router.get('/downloadReceipt/:bookid', verifyToken, async (req, res) => {
-//   try {
-//     const pdf = new jsPDF();
-//     const booking = this.bookingData;
-//     // Header
-//     pdf.setFontSize(22);
-//     pdf.setFont('helvetica', 'bold');
-//     pdf.text('TREKONE ADVENTURES', 105, 20, { align: 'center' });
-
-//     pdf.setFontSize(12);
-//     pdf.setFont('helvetica', 'normal');
-//     pdf.text('Booking Confirmation Receipt', 105, 28, { align: 'center' });
-
-//     // Divider
-//     pdf.line(15, 35, 195, 35);
-
-//     // Booking ID
-//     pdf.setFont('helvetica', 'bold');
-//     pdf.text('Booking ID:', 15, 45);
-
-//     pdf.setFont('helvetica', 'normal');
-//     pdf.text(booking.bookingid, 55, 45);
-
-//     // Table
-//     autoTable(pdf, {
-//       startY: 55,
-//       theme: 'grid',
-//       head: [['Field', 'Details']],
-//       body: [
-//         ['Customer Name', booking.customername],
-//         ['Mobile', booking.mobile],
-//         ['Email', booking.email],
-//         ['Trek Name', booking.eventname],
-//         ['Trek Date', booking.eventdate],
-//         ['No. of Persons', booking.noofpersons],
-//         ['Pick-up Point', booking.pickuplocation],
-//         ['Amount Paid', 'Rs. ' + booking.amount]
-//       ]
-//     });
-
-//     // Footer Note
-//     const finalY = (pdf).lastAutoTable.finalY + 15;
-
-//     pdf.setFontSize(11);
-//     pdf.text(
-//       'Please carry a valid ID proof and reach the pickup location on time.',
-//       15,
-//       finalY
-//     );
-
-//     pdf.setFontSize(10);
-//     pdf.text(
-//       'Thank you for booking with TrekOne Adventures.',
-//       15,
-//       finalY + 15
-//     );
-//     pdf.save('TrekOne-Booking-Receipt_' + booking.bookingid + '.pdf');
-
-//   } catch (error) {
-//     res.status(500).json({
-//       message: error.message
-//     });
-//   }
-// });
 module.exports = router;
 

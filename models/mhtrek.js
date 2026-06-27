@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 
 const Schema = mongoose.Schema;
 
-const freetrekSchema = new Schema({
+const mhtrekSchema = new Schema({
     eventname: String,
     description: String,
     eventdate: [String],
@@ -39,9 +39,13 @@ const freetrekSchema = new Schema({
         default: false
     },
     createdAt: {
-    type: Date,
-    default: Date.now
-  }
+        type: Date,
+        default: Date.now
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    }
 });
 
-module.exports = mongoose.model('freetrek', freetrekSchema, 'freetreks');
+module.exports = mongoose.model('mhtrek', mhtrekSchema, 'mhtreks');
