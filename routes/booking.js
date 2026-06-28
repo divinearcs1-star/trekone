@@ -1,13 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const router = express.Router();   // Create route handler
-const User = require('../models/user');  // User collection model
 const Booking = require('../models/booking');
 const Razorpay = require('razorpay');
 const { sendMail } = require('../services/emailService');
 const verifyToken = require('../middlewares/auth');
-const Mhtrek = require('../models/mhtrek');
-const Himalayatrek = require('../models/himalayatrek');
+const Trek = require('../models/trek');
 
 router.post('/create-Order', async (req, res) => {
   try {
@@ -15,14 +13,24 @@ router.post('/create-Order', async (req, res) => {
     const bookingData = req.body;
 
     //  prevent overbooking
-    const trek = await Mhtrek.findOne({
-      eventname: bookingData.eventname
-    });
 
-    if (trek.availableSeats < bookingData.noofpersons) {
+    const updated = await Trek.findOneAndUpdate(
+      {
+        _id: bookingData.trekId,
+        availableSeats: { $gte: bookingData.noofpersons }
+      },
+      {
+        $inc: {
+          availableSeats: -bookingData.noofpersons
+        }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
       return res.status(400).json({
         success: false,
-        message: "Not enough seats"
+        message: "Not enough seats available"
       });
     }
     //
@@ -43,19 +51,6 @@ router.post('/create-Order', async (req, res) => {
       const newBooking = new Booking(bookingData);
       await newBooking.save();
       console.log("booking inserted");
-
-      //  booking seat manage
-      await Mhtrek.updateOne(
-        {
-          eventname: bookingData.eventname
-        },
-        {
-          $inc: {
-            availableSeats: -bookingData.noofpersons
-          }
-        }
-      );
-      //
 
       const razorpay = new Razorpay({
         key_id: process.env.RAZORPAY_KEY_ID,
@@ -89,6 +84,14 @@ router.post('/create-Order', async (req, res) => {
       }
       catch (error) {
         console.error(error);
+        await Trek.updateOne(
+          { _id: bookingData.trekId },
+          {
+            $inc: {
+              availableSeats: bookingData.noofpersons
+            }
+          }
+        );
         res.status(500).json({
           success: false,
           message: error.message
@@ -100,15 +103,23 @@ router.post('/create-Order', async (req, res) => {
     }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error while booking' });
-  }
+    await Trek.updateOne(
+      { _id: bookingData.trekId },
+      { 
+        $inc: {
+          availableSeats: bookingData.noofpersons
+        }
+      }
+    );
+  res.status(500).json({ message: 'Error while booking' });
+}
 });
 
 router.post('/cancel-booking', verifyToken, async (req, res) => {
   try {
     console.log("inside cancel booking");
     const { bookingid } = req.body;
-    const booking = await Booking.findOne({ bookingid });
+    const booking = await Booking.findOne({ bookingid, email: req.email });
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -131,16 +142,24 @@ router.post('/cancel-booking', verifyToken, async (req, res) => {
     await booking.save();
 
     //  update seats available
-    await Mhtrek.updateOne(
+    const updated = await Trek.findOneAndUpdate(
       {
-        eventname: booking.eventname
+        _id: booking.trekId,
       },
       {
         $inc: {
           availableSeats: booking.noofpersons
         }
-      }
+      },
+      { new: true }
     );
+
+    if (!updated) {
+      return res.status(400).json({
+        success: false,
+        message: "Not enough seats available"
+      });
+    }
     //
 
     //
@@ -168,14 +187,14 @@ router.post('/cancel-booking', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/mybookings/:email', verifyToken, async (req, res) => {
+router.get('/mybookings', verifyToken, async (req, res) => {
   try {
     console.log("inside my booking")
-    const email = req.params.email;
+    // const email = req.params.email;
     const today = new Date().toISOString().split("T")[0];
 
     const bookings = await Booking.find({
-      email: email,
+      email: req.email,
       eventdate: { $gte: today }
     });
 

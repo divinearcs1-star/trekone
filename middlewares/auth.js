@@ -22,9 +22,9 @@ const verifyToken = async  (req, res, next) => {
     if (!user || user.status === 'blocked') {
       return res.status(403).send('Account blocked');
     }
-    req.user = payload;
-    // req.email = payload.email;
-    // req.role = payload.role;
+    // req.user = payload;
+    req.email = payload.email;
+    req.role = payload.role;
     next();
 
   } catch (error) {

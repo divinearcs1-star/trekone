@@ -5,6 +5,11 @@ const Schema = mongoose.Schema;
 
 const bookingSchema = new Schema({
     bookingid: String,
+    trekId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Trek',
+        required: true
+    },
     orderid: String,
     eventname: String,
     customername: String,

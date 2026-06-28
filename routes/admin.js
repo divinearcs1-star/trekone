@@ -6,19 +6,18 @@ const verifyAdmin = require('../middlewares/adminAuth');
 
 const Booking = require('../models/booking');
 const User = require('../models/user');
-const Mhtrek = require('../models/mhtrek');
-const Himalayatrek = require('../models/himalayatrek');
+const Trek = require('../models/trek');
 
 router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const totalBookings = await Booking.countDocuments();
     const totalUsers = await User.countDocuments();
-    const totalMhTreks = await Mhtrek.countDocuments();
-    const totalHimalayaTreks = await Himalayatrek.countDocuments();
+    const activeTreks = await Trek.countDocuments({ status: "Active" });
 
-    const paidBookings = await Booking.find({
-      paymentstatus: "Paid"
-    });
+    const paidBookings = await Booking.find(
+      { paymentstatus: "Paid" },
+      { amount: 1 }
+    );
     let totalRevenue = 0;
     paidBookings.forEach(x => {
       totalRevenue += x.amount;
@@ -27,15 +26,15 @@ router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
       refundstatus: "Refunded"
     });
     const today = new Date().toISOString().split("T")[0];
-    const upcomingTreks = await Mhtrek.countDocuments({
-      isActive: true,
+    const upcomingTreks = await Trek.countDocuments({
+      status: "Active",
       eventdate: {
         $elemMatch: { $gte: today }
       }
     });
     res.json({
       totalBookings,
-      activeTreks: totalMhTreks + totalHimalayaTreks,
+      activeTreks,
       totalUsers,
       totalRevenue,
       totalRefunds,
@@ -76,16 +75,11 @@ router.get('/users', verifyToken, verifyAdmin, async (req, res) => {
 
 router.get('/treks', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const mhTreks = await Mhtrek.find();
-    const himalayaTreks = await Himalayatrek.find();
-    const mhData = mhTreks.map(trek => ({
+    const treks = await Trek.find();
+    const Data = treks.map(trek => ({
       ...trek.toObject()
     }));
-    const himalayaData = himalayaTreks.map(trek => ({
-      ...trek.toObject()
-    }));
-    const allTreks = [...mhData, ...himalayaData];
-    res.json(allTreks);
+    res.json(Data);
   } catch (error) {
     res.status(500).json({
       message: error.message
@@ -111,12 +105,7 @@ router.get('/refunds', verifyToken, verifyAdmin, async (req, res) => {
 router.post('/add-trek', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const trekData = req.body;
-    let newTrek;
-    if (trekData.specialEvent === true) {
-      newTrek = new Himalayatrek(trekData);
-    } else {
-      newTrek = new Mhtrek(trekData);
-    }
+    const newTrek = new Trek(trekData);
     await newTrek.save();
     res.status(200).json({
       success: true,
@@ -132,15 +121,10 @@ router.post('/add-trek', verifyToken, verifyAdmin, async (req, res) => {
 });
 
 // get single trek
-router.get('/trek/:id/:type', verifyToken, verifyAdmin, async (req, res) => {
+router.get('/trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const { id, type } = req.params;
-    let trek;
-    if (type === 'Paid') {
-      trek = await Himalayatrek.findById(id);
-    } else {
-      trek = await Mhtrek.findById(id);
-    }
+    const { id } = req.params;
+    const trek = await Trek.findById(id);
     if (!trek) {
       return res.status(404).json({
         success: false,
@@ -157,24 +141,15 @@ router.get('/trek/:id/:type', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-router.put('/update-trek/:id/:type', verifyToken, verifyAdmin, async (req, res) => {
+router.put('/update-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const { id, type } = req.params;
+    const { id } = req.params;
     const trekData = req.body;
-    let updatedTrek;
-    if (type === 'Paid') {
-      updatedTrek = await Himalayatrek.findByIdAndUpdate(
-        id,
-        trekData,
-        { new: true }
-      );
-    } else {
-      updatedTrek = await Mhtrek.findByIdAndUpdate(
-        id,
-        trekData,
-        { new: true }
-      );
-    }
+    const updatedTrek = await Trek.findByIdAndUpdate(
+      id,
+      trekData,
+      { new: true }
+    );
     res.status(200).json({
       success: true,
       message: "Trek updated successfully",
@@ -189,14 +164,10 @@ router.put('/update-trek/:id/:type', verifyToken, verifyAdmin, async (req, res) 
   }
 });
 
-router.delete('/delete-trek/:id/:type', verifyToken, verifyAdmin, async (req, res) => {
+router.delete('/delete-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const { id, type } = req.params;
-    if (type === 'Paid') {
-      await Himalayatrek.findByIdAndDelete(id);
-    } else {
-      await Mhtrek.findByIdAndDelete(id);
-    }
+    const { id } = req.params;
+    await Trek.findByIdAndDelete(id);
     res.status(200).json({
       success: true,
       message: "Trek deleted successfully"
@@ -300,7 +271,7 @@ router.put('/unblock-user/:id', verifyToken, verifyAdmin, async (req, res) => {
 
 router.put('/update-seats/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const trek = await Mhtrek.findById(req.params.id);
+    const trek = await Trek.findById(req.params.id);
 
     if (!trek) {
       return res.status(404).json({
@@ -312,10 +283,14 @@ router.put('/update-seats/:id', verifyToken, verifyAdmin, async (req, res) => {
     const bookedSeats =
       trek.totalSeats - trek.availableSeats;
 
+    if (req.body.totalSeats < bookedSeats) {
+      return res.status(400).json({
+        success: false,
+        message: "Total seats cannot be less than booked seats"
+      });
+    }
     trek.totalSeats = req.body.totalSeats;
-    trek.availableSeats =
-      req.body.totalSeats - bookedSeats;
-
+    trek.availableSeats = req.body.totalSeats - bookedSeats;
     await trek.save();
 
     res.json({

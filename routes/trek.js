@@ -1,14 +1,14 @@
 require('dotenv').config();
 const express = require('express');
 const router = express.Router();   // Create route handler
-const Mhtrek = require('../models/mhtrek');
-const Himalayatrek = require('../models/himalayatrek');
+const Trek = require('../models/trek');
 const verifyToken = require('../middlewares/auth');
+const verifyAdmin = require('../middlewares/adminAuth');
 
 router.get('/allTrek', async (req, res) => {
   try {
     console.log("In trek");
-    const data = await Mhtrek.find({});
+    const data = await Trek.find({});
 
     res.json(data);
   } catch (error) {
@@ -22,7 +22,7 @@ router.get('/filterTrek', async (req, res) => {
     console.log("In filter trek");
     const today = new Date().toISOString().split("T")[0];
 
-    const data = await Mhtrek.find({
+    const data = await Trek.find({
       eventdate: {
         $elemMatch: { $gte: today }
       }
@@ -37,7 +37,7 @@ router.get('/filterTrek', async (req, res) => {
 router.get('/specialTrek', verifyToken, async (req, res) => {
   try {
     console.log("In specialtrek");
-    const data = await Himalayatrek.find({
+    const data = await Trek.find({
       specialEvent: true
     });
     res.json(data);
@@ -47,18 +47,17 @@ router.get('/specialTrek', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/trek/:id/:type', async (req, res) => {
+router.get('/trek/:id', async (req, res) => {
   try {
-    const { id, type } = req.params;
+    const { id } = req.params;
 
-    let trek;
-
-    if (type === "free") {
-      trek = await Mhtrek.findById(id);
-    } else {
-      trek = await Himalayatrek.findById(id);
+    const trek = await Trek.findById(id);
+    if (!trek) {
+      return res.status(404).json({
+        success: false,
+        message: "Trek not found"
+      });
     }
-
     res.json(trek);
 
   } catch (error) {
@@ -68,26 +67,15 @@ router.get('/trek/:id/:type', async (req, res) => {
   }
 });
 
-router.put('/update-trek/:id/:type', async (req, res) => {
+router.put('/update-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const { id, type } = req.params;
+    const { id } = req.params;
 
-    let updatedTrek;
-
-    if (type === "free") {
-      updatedTrek = await Mhtrek.findByIdAndUpdate(
-        id,
-        req.body,
-        { new: true }
-      );
-    } else {
-      updatedTrek = await Himalayatrek.findByIdAndUpdate(
-        id,
-        req.body,
-        { new: true }
-      );
-    }
-
+    const updatedTrek = await Trek.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true }
+    );
     res.json({
       success: true,
       trek: updatedTrek
@@ -100,15 +88,11 @@ router.put('/update-trek/:id/:type', async (req, res) => {
   }
 });
 
-router.delete('/delete-trek/:id/:type', async (req, res) => {
+router.delete('/delete-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const { id, type } = req.params;
+    const { id } = req.params;
 
-    if (type === "free") {
-      await Mhtrek.findByIdAndDelete(id);
-    } else {
-      await Himalayatrek.findByIdAndDelete(id);
-    }
+    await Trek.findByIdAndDelete(id);
 
     res.json({
       success: true,

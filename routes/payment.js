@@ -7,6 +7,8 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { sendMail } = require('../services/emailService');
 const verifyToken = require('../middlewares/auth');
+const verifyAdmin = require('../middlewares/adminAuth');
+const Trek = require('../models/trek');
 
 router.post('/verifypayment', async (req, res) => {
   console.log("Inside verify");
@@ -99,6 +101,20 @@ router.post('/razorpay/webhook', async (req, res) => {
         }
       );
       console.log("Payment updated from webhook");
+
+      //  booking seat manage
+      // const bookingData = await Booking.findOne({ orderid: payment.order_id });
+      // await Trek.updateOne(
+      //   {
+      //     eventname: bookingData.eventname
+      //   },
+      //   {
+      //     $inc: {
+      //       availableSeats: -bookingData.noofpersons
+      //     }
+      //   }
+      // );
+      // //
       //
       const booking = await Booking.findOne({
         orderid: payment.order_id
@@ -137,6 +153,19 @@ router.post('/razorpay/webhook', async (req, res) => {
           }
         }
       );
+      //
+      const booking = await Booking.findOne({ orderid: payment.order_id });
+      await Trek.updateOne(
+        {
+          _id: booking.trekId
+        },
+        {
+          $inc: {
+            availableSeats: booking.noofpersons
+          }
+        }
+      );
+      //
     }
     if (event === "refund.processed") {
       const refund = payload.payload.refund.entity;
@@ -280,9 +309,9 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
     await booking.save();
 
     //  upadte seats available
-    await Mhtrek.updateOne(
+    await Trek.updateOne(
       {
-        eventname: booking.eventname
+        _id: booking.trekId
       },
       {
         $inc: {

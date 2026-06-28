@@ -40,11 +40,11 @@ router.post('/login', async (req, res) => {
           res.status(200).send({ message: 'Login Success', accessToken, refreshToken, role: data.role });
         }
         else {
-          res.status(401).json({ status: '401', message: 'Invalid Password' });
+          res.status(401).json({ status: '401', message: 'Invalid credentials' });
         }
       }
       else {
-        res.status(401).json({ status: '401', message: 'Invalid Username' });
+        res.status(401).json({ status: '401', message: 'Invalid credentials' });
       }
     }
     else {
@@ -62,8 +62,11 @@ router.post('/register', async (req, res) => {
   try {
     console.log("Inside register");
     const userData = req.body;
-    const hashedPassword = await bcrypt.hash(userData.password, 10);
-    userData.password = hashedPassword;
+    if (!userData.email || !userData.password) {
+      return res.status(400).json({
+        message: "Email and password required"
+      });
+    }
     const checkeddata = await User.findOne({ email: userData.email });
     if (checkeddata) {
       console.log("user present");
@@ -71,6 +74,8 @@ router.post('/register', async (req, res) => {
     }
     else {
       // Create new user
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      userData.password = hashedPassword;
       const newUser = new User({
         email: userData.email, password: hashedPassword, phone: userData.phone, city: userData.city
       });
@@ -143,6 +148,14 @@ router.post('/refresh-token', async (req, res) => {
 router.post('/logout', async (req, res) => {
   try {
     const { refreshToken } = req.body;
+
+    const user = await User.findOne({ refreshToken });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Invalid token"
+      });
+    }
 
     await User.updateOne(
       { refreshToken },
