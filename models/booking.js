@@ -10,6 +10,10 @@ const bookingSchema = new Schema({
         ref: 'Trek',
         required: true
     },
+    batchCode: {
+        type: String,
+        required: true
+    },
     orderid: String,
     eventname: String,
     customername: String,
@@ -18,7 +22,10 @@ const bookingSchema = new Schema({
     emergencymobile: Number,
     city: String,
     pickuplocation: String,
-    eventdate: String,
+    eventdate: {
+        type: Date,
+        required: true
+    },
     noofpersons: Number,
     eventfee: Number,
     amount: Number,
@@ -30,8 +37,8 @@ const bookingSchema = new Schema({
     },
     paymentstatus: String,
     paymentid: String,
-    paymentdate: String,
-    bookingdate: String,
+    paymentdate: Date,
+    bookingdate: Date,
     paymentvia: String,
     createdAt: {
         type: Date,
@@ -39,7 +46,7 @@ const bookingSchema = new Schema({
     },
     bookingstatus: {
         type: String,
-        default: "Confirmed"
+        default: "Pending"
     },
     refundstatus: {
         type: String,
@@ -47,9 +54,8 @@ const bookingSchema = new Schema({
     },
     refundid: String,
     refunddate: Date,
-    eventimage: String,
-    departurefrom: String,
-    guide: String
+    refundRequestedAt: Date,
+    refundEligibleAmount: Number
 });
 
 module.exports = mongoose.model('booking', bookingSchema, 'bookings');

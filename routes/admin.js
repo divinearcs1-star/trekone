@@ -7,6 +7,8 @@ const verifyAdmin = require('../middlewares/adminAuth');
 const Booking = require('../models/booking');
 const User = require('../models/user');
 const Trek = require('../models/trek');
+const Razorpay = require('razorpay');
+const { sendMail } = require('../services/emailService');
 
 router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
   try {
@@ -25,11 +27,14 @@ router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
     const totalRefunds = await Booking.countDocuments({
       refundstatus: "Refunded"
     });
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const upcomingTreks = await Trek.countDocuments({
       status: "Active",
-      eventdate: {
-        $elemMatch: { $gte: today }
+      batches: {
+        $elemMatch: {
+          eventDate: { $gte: today }
+        }
       }
     });
     res.json({
@@ -87,12 +92,127 @@ router.get('/treks', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
+// showing request refund dashbaord on admin panel
 router.get('/refunds', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const refunds = await Booking.find({
-      refundstatus: "Refunded"
+      bookingstatus: "Cancellation Requested"
     }).sort({ bookingdate: -1 });
     res.status(200).json(refunds);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching refunds"
+    });
+  }
+});
+
+// approve refund as per business logic
+router.post('/approve-refund', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    console.log(" inside approve refund")
+    const { bookingid } = req.body;
+    const booking = await Booking.findOne({ bookingid });
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found"
+      });
+    }
+    if (booking.refundstatus !== "Pending" || booking.bookingstatus !== "Cancellation Requested") {
+      return res.status(400).json({
+        message: "Refund already processed"
+      });
+    }
+    let refundAmount = booking?.refundEligibleAmount;
+    if (refundAmount <= 0) {
+      booking.bookingstatus = "Cancelled";
+      booking.refundstatus = "Rejected";
+      await booking.save();
+      return res.status(400).json({
+        message: "Refund not applicable before 48 hours"
+      });
+    }
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET
+    });
+    const refund = await razorpay.payments.refund(booking.paymentid, {
+      amount: refundAmount * 100   // optional (paisa)
+    });
+    console.log("Refund initiated:", refund);
+    // Update booking
+    booking.bookingstatus = "Cancelled";
+    booking.refundstatus = "Initiated";
+    booking.paymentstatus = "Refund Initiated";
+    booking.refundid = refund.id;
+    booking.refunddate = new Date();
+    await booking.save();
+
+    //  upadte seats available
+    const trek = await Trek.findById(booking.trekId);
+    if (!trek) {
+      return res.status(404).json({
+        message: "Trek not found"
+      });
+    }
+    const batch = trek.batches.find(
+      b => b.batchId === booking.batchCode
+    );
+    if (batch.availableSeats + booking.noofpersons <= batch.totalSeats) {
+      batch.availableSeats += booking.noofpersons;
+      await trek.save();
+    }
+    res.status(200).json({
+      success: true,
+      message: 'Refund successful',
+      refund
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching refunds"
+    });
+  }
+});
+
+router.post('/reject-refund', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    console.log(" inside reject refund")
+    const { bookingid } = req.body;
+    const booking = await Booking.findOne({ bookingid });
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found"
+      });
+    }
+    if (booking.refundstatus !== "Pending" || booking.bookingstatus !== "Cancellation Requested") {
+      return res.status(400).json({
+        message: "Refund request already processed"
+      });
+    }
+    booking.bookingstatus = "Confirmed";
+    booking.refundstatus = "Rejected";
+    await booking.save();
+
+    const htmlContent = `
+            <h2>Refund Rejected</h2>
+            <p>Hello ${booking.customername},</p>
+            <p>Your refund request for <b>${booking.eventname}</b> has been rejected.</p>
+            <p><b>Booking ID:</b> ${booking.bookingid}</p>
+            <p><b>Trek Date:</b> ${new Date(booking.eventdate).toDateString()}</p>
+            <p><b>Refund Status:</b> Rejected</p>
+            <p>Reason: Cancel before 48 hours.</p>
+            <br/>
+            <p>Thank you for choosing TrekOne.</p>
+            <p><b>Team TrekOne</b></p>`;
+    await sendMail(booking.email, "Refund Request Rejected", htmlContent);
+
+    res.status(200).json({
+      success: true,
+      message: 'Refund Rejected'
+    });
   } catch (error) {
     console.log(error);
     res.status(500).json({
@@ -141,28 +261,28 @@ router.get('/trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-router.put('/update-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const trekData = req.body;
-    const updatedTrek = await Trek.findByIdAndUpdate(
-      id,
-      trekData,
-      { new: true }
-    );
-    res.status(200).json({
-      success: true,
-      message: "Trek updated successfully",
-      updatedTrek
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      message: "Error updating trek"
-    });
-  }
-});
+// router.put('/update-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const trekData = req.body;
+//     const updatedTrek = await Trek.findByIdAndUpdate(
+//       id,
+//       trekData,
+//       { new: true }
+//     );
+//     res.status(200).json({
+//       success: true,
+//       message: "Trek updated successfully",
+//       updatedTrek
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error updating trek"
+//     });
+//   }
+// });
 
 router.delete('/delete-trek/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
@@ -218,7 +338,7 @@ router.get('/payments', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const payments = await Booking.find({
       paymentstatus: {
-        $in: ['Paid', 'Refunded', 'Failed', 'Pending']
+        $in: ['Paid', 'Refunded', 'Failed', 'Refund Initiated', 'Pending']
       }
     }).sort({ paymentdate: -1 });
     res.status(200).json(payments);
@@ -269,40 +389,39 @@ router.put('/unblock-user/:id', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-router.put('/update-seats/:id', verifyToken, verifyAdmin, async (req, res) => {
-  try {
-    const trek = await Trek.findById(req.params.id);
+// router.put('/update-seats/:id', verifyToken, verifyAdmin, async (req, res) => {
+//   try {
+//     const trek = await Trek.findById(req.params.id);
 
-    if (!trek) {
-      return res.status(404).json({
-        success: false,
-        message: "Trek not found"
-      });
-    }
+//     if (!trek) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Trek not found"
+//       });
+//     }
+//     const bookedSeats =
+//       trek.totalSeats - trek.availableSeats;
 
-    const bookedSeats =
-      trek.totalSeats - trek.availableSeats;
+//     if (req.body.totalSeats < bookedSeats) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Total seats cannot be less than booked seats"
+//       });
+//     }
+//     trek.totalSeats = req.body.totalSeats;
+//     trek.availableSeats = req.body.totalSeats - bookedSeats;
+//     await trek.save();
 
-    if (req.body.totalSeats < bookedSeats) {
-      return res.status(400).json({
-        success: false,
-        message: "Total seats cannot be less than booked seats"
-      });
-    }
-    trek.totalSeats = req.body.totalSeats;
-    trek.availableSeats = req.body.totalSeats - bookedSeats;
-    await trek.save();
+//     res.json({
+//       success: true,
+//       message: "Seats updated"
+//     });
 
-    res.json({
-      success: true,
-      message: "Seats updated"
-    });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false
+//     });
+//   }
+// });
 
-  } catch (error) {
-    res.status(500).json({
-      success: false
-    });
-  }
-});
-
-module.exports = router;
+module.exports = router

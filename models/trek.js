@@ -7,7 +7,42 @@ const trekSchema = new Schema({
     required: true,
     trim: true
   },
-  eventdate: [String],
+  //
+  batches: [{
+    batchId: {
+      type: String,   // BATCH-001
+      required: true
+    },
+    eventDate: {
+      type: Date,
+      required: true
+    },
+    endDate: {
+      type: Date  
+    },
+    reportingTime: {
+      type: String 
+    },
+    totalSeats: {
+      type: Number,
+      required: true
+    },
+    availableSeats: {
+      type: Number,
+      required: true
+    },
+    fees: {
+      type: Number,
+      required: true
+    },
+    discountFee: Number,
+    status: {
+      type: String,
+      enum: ["Active", "Full", "Cancelled", "Completed"],
+      default: "Active"
+    }
+  }],
+  //
   eventTagline: String,
   eventTag: String,
   description: String,
@@ -44,15 +79,9 @@ const trekSchema = new Schema({
     type: Number,
     required: true
   },
-  discountFee: Number,
   refundPolicy: String,
   totalSeats: {
     type: Number,
-    required: true
-  },
-  availableSeats: {
-    type: Number,
-    required: true
   },
   guide: {
     name: String,
@@ -71,10 +100,10 @@ const trekSchema = new Schema({
     {
       day: Number,
       title: String,
-      details: String
+      description: String
     }
   ],
-  pickuplocation: [String],
+  pickupLocation: [String],
   specialEvent: {
     type: Boolean,
     default: false

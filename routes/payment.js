@@ -33,14 +33,14 @@ router.post('/verifypayment', async (req, res) => {
         $set: {
           paymentstatus: "Paid",
           paymentdate: new Date(),
-          // orderid: razorpay_order_id,
+          bookingstatus: "Success",
           paymentid: razorpay_payment_id
         }
       }
     );
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
+    // if (result.matchedCount === 0) {
+    //   return res.status(404).json({ message: "Booking not found" });
+    // }
     res.status(200).json({
       success: true,
       message: 'Payment Verified'
@@ -95,6 +95,7 @@ router.post('/razorpay/webhook', async (req, res) => {
         {
           $set: {
             paymentstatus: "Paid",
+            bookingstatus: "Success",
             paymentid: payment.id,
             paymentdate: new Date()
           }
@@ -127,7 +128,7 @@ router.post('/razorpay/webhook', async (req, res) => {
       const htmlContent = `
     <h1>Booking Confirmed 🎉</h1>
     <p>Hello ${booking.customername},</p>
-    <p>Your trek booking has been successfully confirmed.</p>
+    <p>Your Trek booking for <b>${booking.eventname}</b> has been successfully confirmed.</p>
     <hr/>
     <p><b>Booking ID:</b> ${booking.bookingid}</p>
     <p><b>Order ID:</b> ${booking.orderid}</p>
@@ -145,26 +146,37 @@ router.post('/razorpay/webhook', async (req, res) => {
     }
     if (event === 'payment.failed') {
       const payment = payload.payload.payment.entity;
+
+      const booking = await Booking.findOne({ orderid: payment.order_id });
+      if (!booking) {
+        return res.status(404).json({
+          message: "Booking not found"
+        });
+      }
+      if (booking.paymentstatus === "Failed") return;
       await Booking.updateOne(
         { orderid: payment.order_id },
         {
           $set: {
-            paymentstatus: "Failed"
+            paymentstatus: "Failed",
+            bookingstatus: "Failed"
           }
         }
       );
-      //
-      const booking = await Booking.findOne({ orderid: payment.order_id });
-      await Trek.updateOne(
-        {
-          _id: booking.trekId
-        },
-        {
-          $inc: {
-            availableSeats: booking.noofpersons
-          }
-        }
+      const trek = await Trek.findById(booking.trekId);
+      if (!trek) {
+        return res.status(404).json({
+          message: "Trek not found"
+        });
+      }
+      const batch = trek.batches.find(
+        b => b.batchId === booking.batchCode
       );
+
+      if (batch.availableSeats + booking.noofpersons <= batch.totalSeats) {
+        batch.availableSeats += booking.noofpersons;
+        await trek.save();
+      }
       //
     }
     if (event === "refund.processed") {
@@ -173,7 +185,8 @@ router.post('/razorpay/webhook', async (req, res) => {
         { paymentid: refund.payment_id },
         {
           $set: {
-            paymentstatus: "Refunded"
+            paymentstatus: "Refunded",
+            refundstatus : "Refunded"
           }
         }
       );
@@ -190,13 +203,14 @@ router.post('/razorpay/webhook', async (req, res) => {
       const htmlContent = `
     <h2>Refund Completed</h2>
     <p>Hello ${booking.customername},</p>
-    <p>Your refund has been successfully processed.</p>
+    <p>Your refund for <b>${booking.eventname}</b> has been successfully processed.</p>
     <p><b>Booking ID:</b> ${booking.bookingid}</p>
     <p><b>Refund ID:</b> ${refund.id}</p>
     <p><b>Refund Amount:</b> ₹${refund.amount / 100}</p>
     <p>Refund will reflect in your account within 5-7 business days.</p>
     <br/>
-    <p>Team TrekOne</p>`;
+    <p>Thank you for choosing TrekOne.</p>
+    <p><b>Team TrekOne</b></p>`;
       await sendMail(booking.email, "TrekOne Refund Completed", htmlContent);
       //
     }
@@ -309,17 +323,33 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
     await booking.save();
 
     //  upadte seats available
-    await Trek.updateOne(
-      {
-        _id: booking.trekId
-      },
-      {
-        $inc: {
-          availableSeats: booking.noofpersons
-        }
-      }
+    const trek = await Trek.findById(booking.trekId);
+    if (!trek) {
+      return res.status(404).json({
+        message: "Trek not found"
+      });
+    }
+    const batch = trek.batches.find(
+      b => b.batchId === booking.batchCode
     );
+
+    if (batch.availableSeats + booking.noofpersons <= batch.totalSeats) {
+      batch.availableSeats += booking.noofpersons;
+      await trek.save();
+    }
     //  forgot to send mail
+    const htmlContent = `
+        <h2>Booking Cancelled & Refund Initiated</h2>
+        <p>Hello ${booking.customername},</p>
+        <p>Your booking for <b>${booking.eventname}</b> has been cancelled successfully.</p>
+        <p><b>Booking ID:</b> ${booking.bookingid}</p>
+        <p><b>Trek Date:</b> ${new Date(booking.eventdate).toDateString()}</p>
+        <p><b>Refund Status:</b> Initiated</p>
+        <p>Your refund has been initiated and will be credited to your original payment method within 5-7 business days.</p>
+        <br/>
+        <p>Thank you for choosing TrekOne.</p>
+        <p><b>Team TrekOne</b></p>`;
+    await sendMail(booking.email, "TrekOne Booking Cancelled & Refund", htmlContent);
 
     res.status(200).json({
       success: true,
