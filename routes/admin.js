@@ -17,7 +17,7 @@ router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
     const activeTreks = await Trek.countDocuments({ status: "Active" });
 
     const paidBookings = await Booking.find(
-      { paymentstatus: "Paid" },
+      { paymentStatus: "Paid" },
       { amount: 1 }
     );
     let totalRevenue = 0;
@@ -25,7 +25,7 @@ router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
       totalRevenue += x.amount;
     });
     const totalRefunds = await Booking.countDocuments({
-      refundstatus: "Refunded"
+      refundStatus: "Refunded"
     });
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -55,7 +55,7 @@ router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
 router.get('/bookings', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const bookings = await Booking.find()
-      .sort({ bookingdate: -1 }).limit(10);
+      .sort({ bookingDate: -1 }).limit(10);
     res.status(200).json(bookings);
   } catch (error) {
     console.log(error);
@@ -96,8 +96,8 @@ router.get('/treks', verifyToken, verifyAdmin, async (req, res) => {
 router.get('/refunds', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const refunds = await Booking.find({
-      bookingstatus: "Cancellation Requested"
-    }).sort({ bookingdate: -1 });
+      bookingStatus: "Cancellation Requested"
+    }).sort({ bookingDate: -1 });
     res.status(200).json(refunds);
   } catch (error) {
     console.log(error);
@@ -112,22 +112,22 @@ router.get('/refunds', verifyToken, verifyAdmin, async (req, res) => {
 router.post('/approve-refund', verifyToken, verifyAdmin, async (req, res) => {
   try {
     console.log(" inside approve refund")
-    const { bookingid } = req.body;
-    const booking = await Booking.findOne({ bookingid });
+    const { bookingId } = req.body;
+    const booking = await Booking.findOne({ bookingId });
     if (!booking) {
       return res.status(404).json({
         message: "Booking not found"
       });
     }
-    if (booking.refundstatus !== "Pending" || booking.bookingstatus !== "Cancellation Requested") {
+    if (booking.refundStatus !== "Pending" || booking.bookingStatus !== "Cancellation Requested") {
       return res.status(400).json({
         message: "Refund already processed"
       });
     }
     let refundAmount = booking?.refundEligibleAmount;
     if (refundAmount <= 0) {
-      booking.bookingstatus = "Cancelled";
-      booking.refundstatus = "Rejected";
+      booking.bookingStatus = "Cancelled";
+      booking.refundStatus = "Rejected";
       await booking.save();
       return res.status(400).json({
         message: "Refund not applicable before 48 hours"
@@ -137,16 +137,16 @@ router.post('/approve-refund', verifyToken, verifyAdmin, async (req, res) => {
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
-    const refund = await razorpay.payments.refund(booking.paymentid, {
+    const refund = await razorpay.payments.refund(booking.paymentId, {
       amount: refundAmount * 100   // optional (paisa)
     });
     console.log("Refund initiated:", refund);
     // Update booking
-    booking.bookingstatus = "Cancelled";
-    booking.refundstatus = "Initiated";
-    booking.paymentstatus = "Refund Initiated";
-    booking.refundid = refund.id;
-    booking.refunddate = new Date();
+    booking.bookingStatus = "Cancelled";
+    booking.refundStatus = "Initiated";
+    booking.paymentStatus = "Refund Initiated";
+    booking.refundId = refund.id;
+    booking.refundDate = new Date();
     await booking.save();
 
     //  upadte seats available
@@ -159,8 +159,8 @@ router.post('/approve-refund', verifyToken, verifyAdmin, async (req, res) => {
     const batch = trek.batches.find(
       b => b.batchId === booking.batchCode
     );
-    if (batch.availableSeats + booking.noofpersons <= batch.totalSeats) {
-      batch.availableSeats += booking.noofpersons;
+    if (batch.availableSeats + booking.noOfPersons <= batch.totalSeats) {
+      batch.availableSeats += booking.noOfPersons;
       await trek.save();
     }
     res.status(200).json({
@@ -180,28 +180,28 @@ router.post('/approve-refund', verifyToken, verifyAdmin, async (req, res) => {
 router.post('/reject-refund', verifyToken, verifyAdmin, async (req, res) => {
   try {
     console.log(" inside reject refund")
-    const { bookingid } = req.body;
-    const booking = await Booking.findOne({ bookingid });
+    const { bookingId } = req.body;
+    const booking = await Booking.findOne({ bookingId });
     if (!booking) {
       return res.status(404).json({
         message: "Booking not found"
       });
     }
-    if (booking.refundstatus !== "Pending" || booking.bookingstatus !== "Cancellation Requested") {
+    if (booking.refundStatus !== "Pending" || booking.bookingStatus !== "Cancellation Requested") {
       return res.status(400).json({
         message: "Refund request already processed"
       });
     }
-    booking.bookingstatus = "Confirmed";
-    booking.refundstatus = "Rejected";
+    booking.bookingStatus = "Confirmed";
+    booking.refundStatus = "Rejected";
     await booking.save();
 
     const htmlContent = `
             <h2>Refund Rejected</h2>
-            <p>Hello ${booking.customername},</p>
-            <p>Your refund request for <b>${booking.eventname}</b> has been rejected.</p>
-            <p><b>Booking ID:</b> ${booking.bookingid}</p>
-            <p><b>Trek Date:</b> ${new Date(booking.eventdate).toDateString()}</p>
+            <p>Hello ${booking.customerName},</p>
+            <p>Your refund request for <b>${booking.eventName}</b> has been rejected.</p>
+            <p><b>Booking ID:</b> ${booking.bookingId}</p>
+            <p><b>Trek Date:</b> ${new Date(booking.eventDate).toDateString()}</p>
             <p><b>Refund Status:</b> Rejected</p>
             <p>Reason: Cancel before 48 hours.</p>
             <br/>
@@ -304,7 +304,7 @@ router.delete('/delete-trek/:id', verifyToken, verifyAdmin, async (req, res) => 
 router.get('/allBookings', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const bookings = await Booking.find()
-      .sort({ bookingdate: -1 });
+      .sort({ bookingDate: -1 });
     res.status(200).json(bookings);
   } catch (error) {
     res.status(500).json({
@@ -337,10 +337,10 @@ router.put('/make-admin/:id', verifyToken, verifyAdmin, async (req, res) => {
 router.get('/payments', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const payments = await Booking.find({
-      paymentstatus: {
+      paymentStatus: {
         $in: ['Paid', 'Refunded', 'Failed', 'Refund Initiated', 'Pending']
       }
-    }).sort({ paymentdate: -1 });
+    }).sort({ paymentDate: -1 });
     res.status(200).json(payments);
   } catch (error) {
     console.log(error);

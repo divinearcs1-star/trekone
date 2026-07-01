@@ -13,11 +13,7 @@ const webhookLogSchema = new Schema({
     },
     payload: {
         type: mongoose.Schema.Types.Mixed
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
     }
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('WebhookLog', webhookLogSchema, 'webhookLogs');

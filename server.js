@@ -8,6 +8,7 @@ const paymentRoutes = require('./routes/payment');
 const bookingRoutes = require('./routes/booking');
 const trekRoutes = require('./routes/trek');
 const adminRoutes = require('./routes/admin');
+const reportRoutes = require('./routes/report');
 
 const app = express();
 const port = process.env.PORT || '3000';
@@ -44,6 +45,7 @@ app.use('/payment', paymentRoutes);
 app.use('/booking', bookingRoutes);
 app.use('/trek', trekRoutes);
 app.use('/admin', adminRoutes);
+app.use('/admin/reports', reportRoutes);
 
 app.listen(port, function () {
     console.log("server running on port " + port)

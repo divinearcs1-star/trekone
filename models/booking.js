@@ -4,7 +4,10 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const bookingSchema = new Schema({
-    bookingid: String,
+    bookingId: {
+        type: String,
+        required: true
+    },
     trekId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Trek',
@@ -14,48 +17,82 @@ const bookingSchema = new Schema({
         type: String,
         required: true
     },
-    orderid: String,
-    eventname: String,
-    customername: String,
-    mobile: Number,
-    email: String,
-    emergencymobile: Number,
+    orderId: String,
+    eventName: {
+        type: String,
+        required: true
+    },
+    customerName: {
+        type: String,
+        required: true
+    },
+    mobile: String,
+    email: {
+        type: String,
+        required: true
+    },
+    emergencyMobile: String,
     city: String,
-    pickuplocation: String,
-    eventdate: {
+    pickupLocation: String,
+    eventDate: {
         type: Date,
         required: true
     },
-    noofpersons: Number,
-    eventfee: Number,
-    amount: Number,
+    noOfPersons: Number,
+    eventFee: Number,
+    amount: {
+        type: Number,
+        required: true
+    },
     address: String,
     terms:
     {
         type: Boolean,
         default: false
     },
-    paymentstatus: String,
-    paymentid: String,
-    paymentdate: Date,
-    bookingdate: Date,
-    paymentvia: String,
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    bookingstatus: {
+    paymentStatus: {
         type: String,
+        enum: [
+            "Pending",
+            "Paid",
+            "Failed",
+            "Refund Pending",
+            "Refund Initiated",
+            "Refunded"
+        ],
         default: "Pending"
     },
-    refundstatus: {
+    paymentId: String,
+    paymentDate: Date,
+    bookingDate: Date,
+    paymentVia: String,
+    bookingStatus: {
         type: String,
+        enum: [
+            "Pending",
+            "Success",
+            "Failed",
+            "Confirmed",
+            "Cancellation Requested",
+            "Cancelled"
+        ],
+        default: "Pending"
+    },
+    refundStatus: {
+        type: String,
+        enum: [
+            "Not Requested",
+            "Pending",
+            "Initiated",
+            "Rejected",
+            "Refunded"
+        ],
         default: "Not Requested"
     },
-    refundid: String,
-    refunddate: Date,
+    refundId: String,
+    refundDate: Date,
     refundRequestedAt: Date,
     refundEligibleAmount: Number
-});
+}, { timestamps: true });
 
-module.exports = mongoose.model('booking', bookingSchema, 'bookings');
+module.exports = mongoose.model('Booking', bookingSchema, 'bookings');

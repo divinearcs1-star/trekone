@@ -28,14 +28,10 @@ const userSchema = new Schema({
         type: Boolean,
         default: false
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
     status: {
         type: String,
         default: 'active'
     }
-});
+}, { timestamps: true });
 
-module.exports = mongoose.model('user', userSchema, 'users');
+module.exports = mongoose.model('User', userSchema, 'users');

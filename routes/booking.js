@@ -20,13 +20,13 @@ router.post('/create-Order', async (req, res) => {
         batches: {
           $elemMatch: {
             batchId: bookingData.batchCode,
-            availableSeats: { $gte: bookingData.noofpersons }
+            availableSeats: { $gte: bookingData.noOfPersons }
           }
         }
       },
       {
         $inc: {
-          "batches.$.availableSeats": -bookingData.noofpersons
+          "batches.$.availableSeats": -bookingData.noOfPersons
         }
       },
       { new: true }
@@ -40,22 +40,22 @@ router.post('/create-Order', async (req, res) => {
     }
     //
 
-    if (bookingData.customername) {
+    if (bookingData.customerName) {
       const now = new Date();
       const orderId = 'TRK' + now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + Date.now().toString().slice(-6);
       // console.log(orderId);
 
-      bookingData.paymentstatus = "Pending"
-      bookingData.bookingid = orderId;
-      bookingData.orderid = "";
-      bookingData.paymentid = "";
-      bookingData.paymentdate = null
-      bookingData.bookingdate = new Date();
-      bookingData.paymentvia = "Razorpay";
-      const formatedDate = bookingData.eventdate;
-      bookingData.eventdate = new Date(formatedDate)
+      bookingData.paymentStatus = "Pending"
+      bookingData.bookingId = orderId;
+      bookingData.orderId = "";
+      bookingData.paymentId = "";
+      bookingData.paymentDate = null
+      bookingData.bookingDate = new Date();
+      bookingData.paymentVia = "Razorpay";
+      const formatedDate = bookingData.eventDate;
+      bookingData.eventDate = new Date(formatedDate)
 
-      console.log("bookingData.eventdate ", bookingData.eventdate);
+      // console.log("bookingData.eventDate ", bookingData.eventDate);
 
       const newBooking = new Booking(bookingData);
       await newBooking.save();
@@ -78,17 +78,17 @@ router.post('/create-Order', async (req, res) => {
 
         // update order id in booking collection
         const result = await Booking.updateOne(
-          { bookingid: bookingData.bookingid },
+          { bookingId: bookingData.bookingId },
           {
             $set: {
-              orderid: order.id
+              orderId: order.id
             }
           }
         );
         if (result.matchedCount === 0) {
           return res.status(404).json({ message: "Booking not found" });
         }
-        order.bookingid = bookingData.bookingid;
+        order.bookingId = bookingData.bookingId;
         res.status(200).json(order);
       }
       catch (error) {
@@ -104,15 +104,15 @@ router.post('/create-Order', async (req, res) => {
           },
           {
             $inc: {
-              "batches.$.availableSeats": bookingData.noofpersons
+              "batches.$.availableSeats": bookingData.noOfPersons
             }
           }
         );
         const failedData = await Booking.updateOne(
-          { bookingid: bookingData.bookingid },
+          { bookingId: bookingData.bookingId },
           {
             $set: {
-              paymentstatus: "Failed"
+              paymentStatus: "Failed"
             }
           }
         );
@@ -138,7 +138,7 @@ router.post('/create-Order', async (req, res) => {
       },
       {
         $inc: {
-          "batches.$.availableSeats": bookingData.noofpersons
+          "batches.$.availableSeats": bookingData.noOfPersons
         }
       }
     );
@@ -154,8 +154,8 @@ router.get('/mybookings', verifyToken, async (req, res) => {
 
     const bookings = await Booking.find({
       email: req.email,
-      eventdate: { $gte: today }
-    }).sort({ bookingdate: -1 });
+      eventDate: { $gte: today }
+    }).sort({ bookingDate: -1 });
 
     // console.log("booking = " ,bookings)
     res.json(bookings);
@@ -169,27 +169,27 @@ router.get('/mybookings', verifyToken, async (req, res) => {
 router.post('/cancel-refund', verifyToken, async (req, res) => {
   try {
     console.log("inside cancel booking");
-    const { bookingid } = req.body;
-    const booking = await Booking.findOne({ bookingid, email: req.email });
+    const { bookingId } = req.body;
+    const booking = await Booking.findOne({ bookingId, email: req.email });
     if (!booking) {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
       });
     }
-    if (booking.paymentstatus === "Refunded" || booking.paymentstatus === "Refund Initiated") {
+    if (booking.paymentStatus === "Refunded" || booking.paymentStatus === "Refund Initiated") {
       return res.status(400).json({
         success: false,
         message: "Booking already refunded"
       });
     }
-    if (booking.bookingstatus === "Cancelled" || booking.bookingstatus === "Cancellation Requested") {
+    if (booking.bookingStatus === "Cancelled" || booking.bookingStatus === "Cancellation Requested") {
       return res.status(400).json({
         success: false,
         message: 'Booking already cancelled'
       });
     }
-    if (booking.paymentstatus !== "Paid") {
+    if (booking.paymentStatus !== "Paid") {
       return res.status(400).json({
         success: false,
         message: "Only paid bookings can be cancelled"
@@ -198,9 +198,9 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
     //
     const requestDate = new Date();
     console.log("requestDate: ", requestDate)
-    console.log("booking.eventdate: ", booking.eventdate)
+    console.log("booking.eventDate: ", booking.eventDate)
     const diffDays = Math.ceil(
-      (new Date(booking.eventdate) - requestDate) /
+      (new Date(booking.eventDate) - requestDate) /
       (1000 * 60 * 60 * 24)
     );
     console.log("diffDays: ", diffDays)
@@ -214,18 +214,18 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
     else {
       refundAmount = 0;
     }
-    booking.bookingstatus = "Cancellation Requested";
-    booking.refundstatus = "Pending";
+    booking.bookingStatus = "Cancellation Requested";
+    booking.refundStatus = "Pending";
     booking.refundRequestedAt = requestDate;
     booking.refundEligibleAmount = refundAmount;
     await booking.save();
 
     const htmlContent = `
     <h2>New cancellation request received</h2>
-    <p><b>Booking ID:</b> ${booking.bookingid}</p>
-    <p>Customer: ${booking.customername} </p>
-    <p><b>Trek:</b> ${booking.eventname}</p>
-    <p><b>Trek Date:</b> ${new Date(booking.eventdate).toDateString()}</p>
+    <p><b>Booking ID:</b> ${booking.bookingId}</p>
+    <p>Customer: ${booking.customerName} </p>
+    <p><b>Trek:</b> ${booking.eventName}</p>
+    <p><b>Trek Date:</b> ${new Date(booking.eventDate).toDateString()}</p>
     <p><b>Amount:</b> ₹${booking.amount}</p>`;
     await sendMail(process.env.EMAIL_ID_ADMIN, "TrekOne Booking Cancellation Request", htmlContent);
     //

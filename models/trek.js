@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const trekSchema = new Schema({
-  eventname: {
+  eventName: {
     type: String,
     required: true,
     trim: true
@@ -112,7 +112,7 @@ const trekSchema = new Schema({
     type: Boolean,
     default: false
   },
-  subtitlevisible: {
+  subtitleVisible: {
     type: Boolean,
     default: false
   },
@@ -120,10 +120,6 @@ const trekSchema = new Schema({
     type: String,
     enum: ['Active', 'Cancelled', 'Completed', 'Hidden'],
     default: 'Active'
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
   }
 }, { timestamps: true });
 

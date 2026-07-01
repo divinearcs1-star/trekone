@@ -24,7 +24,7 @@ router.get('/filterTrek', async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const data = await Trek.aggregate([
       {
-        $project: { _id: 1, eventname: 1, coverImage: 1, difficulty: 1, duration: 1, trekFrom: 1,
+        $project: { _id: 1, eventName: 1, fees:1 ,coverImage: 1, difficulty: 1, duration: 1, trekFrom: 1,
           batches: { $filter: { input: "$batches", as: "batch",
               cond: {$and: [ { $gte: ["$$batch.eventDate", today] },
                   { $eq: ["$$batch.status", "Active"] }
@@ -36,7 +36,7 @@ router.get('/filterTrek', async (req, res) => {
       },
       {
         $project: {
-          _id: 1, eventname: 1, coverImage: 1, difficulty: 1, duration: 1, trekFrom: 1,
+          _id: 1, eventName: 1, fees:1 , coverImage: 1,difficulty: 1, duration: 1, trekFrom: 1,
           batches: { $sortArray: { input: "$batches", sortBy: { eventDate: 1 }}}}}
     ]);
     // console.log(data)
@@ -55,12 +55,12 @@ router.get('/specialTrek', verifyToken, async (req, res) => {
     const data = await Trek.aggregate([
   {
     $project: {
-      _id: 1,eventname: 1,altitude: 1, description: 1, coverImage: 1,difficulty: 1,duration: 1,trekFrom: 1,specialEvent: 1,
+      _id: 1,eventName: 1,altitude: 1, description: 1, coverImage: 1,difficulty: 1,duration: 1,trekFrom: 1,specialEvent: 1,
       batches: {$filter: {input: "$batches",as: "batch",cond: {
             $and: [{ $gte: ["$$batch.eventDate", today] },{ $eq: ["$$batch.status", "Active"] }]}}}}},
   { $match: {specialEvent: true,"batches.0": { $exists: true }}},
   { $project: {
-      _id: 1,eventname: 1,altitude: 1 ,description:1 ,coverImage: 1,difficulty: 1,duration: 1,trekFrom: 1,specialEvent: 1,
+      _id: 1,eventName: 1,altitude: 1 ,description:1 ,coverImage: 1,difficulty: 1,duration: 1,trekFrom: 1,specialEvent: 1,
       batches: {$sortArray: {input: "$batches",sortBy: { eventDate: 1 }}}}}
 ]);
     console.log(data);

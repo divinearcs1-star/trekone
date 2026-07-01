@@ -28,13 +28,13 @@ router.post('/verifypayment', async (req, res) => {
       });
     }
     const result = await Booking.updateOne(
-      { orderid: razorpay_order_id },
+      { orderId: razorpay_order_id },
       {
         $set: {
-          paymentstatus: "Paid",
-          paymentdate: new Date(),
-          bookingstatus: "Success",
-          paymentid: razorpay_payment_id
+          paymentStatus: "Paid",
+          paymentDate: new Date(),
+          bookingStatus: "Success",
+          paymentId: razorpay_payment_id
         }
       }
     );
@@ -91,34 +91,34 @@ router.post('/razorpay/webhook', async (req, res) => {
       console.log("Amount:", payment.amount);
       console.log("Status:", payment.status);
       await Booking.updateOne(
-        { orderid: payment.order_id },
+        { orderId: payment.order_id },
         {
           $set: {
-            paymentstatus: "Paid",
-            bookingstatus: "Success",
-            paymentid: payment.id,
-            paymentdate: new Date()
+            paymentStatus: "Paid",
+            bookingStatus: "Success",
+            paymentId: payment.id,
+            paymentDate: new Date()
           }
         }
       );
       console.log("Payment updated from webhook");
 
       //  booking seat manage
-      // const bookingData = await Booking.findOne({ orderid: payment.order_id });
+      // const bookingData = await Booking.findOne({ orderId: payment.order_id });
       // await Trek.updateOne(
       //   {
-      //     eventname: bookingData.eventname
+      //     eventName: bookingData.eventName
       //   },
       //   {
       //     $inc: {
-      //       availableSeats: -bookingData.noofpersons
+      //       availableSeats: -bookingData.noOfPersons
       //     }
       //   }
       // );
       // //
       //
       const booking = await Booking.findOne({
-        orderid: payment.order_id
+        orderId: payment.order_id
       });
       if (!booking) {
         return res.status(404).json({
@@ -127,13 +127,13 @@ router.post('/razorpay/webhook', async (req, res) => {
       }
       const htmlContent = `
     <h1>Booking Confirmed 🎉</h1>
-    <p>Hello ${booking.customername},</p>
-    <p>Your Trek booking for <b>${booking.eventname}</b> has been successfully confirmed.</p>
+    <p>Hello ${booking.customerName},</p>
+    <p>Your Trek booking for <b>${booking.eventName}</b> has been successfully confirmed.</p>
     <hr/>
-    <p><b>Booking ID:</b> ${booking.bookingid}</p>
-    <p><b>Order ID:</b> ${booking.orderid}</p>
-    <p><b>Payment ID:</b> ${booking.paymentid}</p>
-    <p><b>Trek Date:</b> ${booking.eventdate}</p>
+    <p><b>Booking ID:</b> ${booking.bookingId}</p>
+    <p><b>Order ID:</b> ${booking.orderId}</p>
+    <p><b>Payment ID:</b> ${booking.paymentId}</p>
+    <p><b>Trek Date:</b> ${booking.eventDate}</p>
     <p><b>Amount Paid:</b> ₹${booking.amount}</p>
     <hr/>
     <p>Please carry valid ID proof on trek day.</p>
@@ -147,19 +147,19 @@ router.post('/razorpay/webhook', async (req, res) => {
     if (event === 'payment.failed') {
       const payment = payload.payload.payment.entity;
 
-      const booking = await Booking.findOne({ orderid: payment.order_id });
+      const booking = await Booking.findOne({ orderId: payment.order_id });
       if (!booking) {
         return res.status(404).json({
           message: "Booking not found"
         });
       }
-      if (booking.paymentstatus === "Failed") return;
+      if (booking.paymentStatus === "Failed") return;
       await Booking.updateOne(
-        { orderid: payment.order_id },
+        { orderId: payment.order_id },
         {
           $set: {
-            paymentstatus: "Failed",
-            bookingstatus: "Failed"
+            paymentStatus: "Failed",
+            bookingStatus: "Failed"
           }
         }
       );
@@ -173,8 +173,8 @@ router.post('/razorpay/webhook', async (req, res) => {
         b => b.batchId === booking.batchCode
       );
 
-      if (batch.availableSeats + booking.noofpersons <= batch.totalSeats) {
-        batch.availableSeats += booking.noofpersons;
+      if (batch.availableSeats + booking.noOfPersons <= batch.totalSeats) {
+        batch.availableSeats += booking.noOfPersons;
         await trek.save();
       }
       //
@@ -182,18 +182,18 @@ router.post('/razorpay/webhook', async (req, res) => {
     if (event === "refund.processed") {
       const refund = payload.payload.refund.entity;
       await Booking.updateOne(
-        { paymentid: refund.payment_id },
+        { paymentId: refund.payment_id },
         {
           $set: {
-            paymentstatus: "Refunded",
-            refundstatus : "Refunded"
+            paymentStatus: "Refunded",
+            refundStatus : "Refunded"
           }
         }
       );
       console.log("Refund processed");
       //
       const booking = await Booking.findOne({
-        paymentid: refund.payment_id
+        paymentId: refund.payment_id
       });
       if (!booking) {
         return res.status(404).json({
@@ -202,9 +202,9 @@ router.post('/razorpay/webhook', async (req, res) => {
       }
       const htmlContent = `
     <h2>Refund Completed</h2>
-    <p>Hello ${booking.customername},</p>
-    <p>Your refund for <b>${booking.eventname}</b> has been successfully processed.</p>
-    <p><b>Booking ID:</b> ${booking.bookingid}</p>
+    <p>Hello ${booking.customerName},</p>
+    <p>Your refund for <b>${booking.eventName}</b> has been successfully processed.</p>
+    <p><b>Booking ID:</b> ${booking.bookingId}</p>
     <p><b>Refund ID:</b> ${refund.id}</p>
     <p><b>Refund Amount:</b> ₹${refund.amount / 100}</p>
     <p>Refund will reflect in your account within 5-7 business days.</p>
@@ -221,23 +221,23 @@ router.post('/razorpay/webhook', async (req, res) => {
   }
 });
 
-router.post('/refund/:paymentid', verifyToken, async (req, res) => {
+router.post('/refund/:paymentId', verifyToken, async (req, res) => {
   try {
     console.log("inside refund");
     const razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
-    const paymentid = req.params.paymentid;
+    const paymentId = req.params.paymentId;
     console.log("amount", req.body.amount);
 
-    const booking = await Booking.findOne({ paymentid, email: req.email });
+    const booking = await Booking.findOne({ paymentId, email: req.email });
     if (!booking) {
       return res.status(404).json({
         message: "Booking not found"
       });
     }
-    const refund = await razorpay.payments.refund(paymentid, {
+    const refund = await razorpay.payments.refund(paymentId, {
       amount: req.body.amount * 100   // optional (paisa)
     });
     console.log("Refund initiated:", refund);
@@ -257,9 +257,9 @@ router.post('/refund/:paymentid', verifyToken, async (req, res) => {
 router.post('/cancel-refund', verifyToken, async (req, res) => {
   try {
     console.log("inside cancel & refund");
-    const { bookingid, paymentid, amount } = req.body;
+    const { bookingId, paymentId, amount } = req.body;
     // Find booking
-    const booking = await Booking.findOne({ bookingid, email: req.email });
+    const booking = await Booking.findOne({ bookingId, email: req.email });
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -267,19 +267,19 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
       });
     }
     // Already refunded check
-    if (booking.refundstatus === "Refunded") {
+    if (booking.refundStatus === "Refunded") {
       return res.status(400).json({
         success: false,
         message: 'Already refunded'
       });
     }
-    if (booking.bookingstatus === "Cancelled") {
+    if (booking.bookingStatus === "Cancelled") {
       return res.status(400).json({
         success: false,
         message: "Booking already cancelled"
       });
     }
-    if (booking.paymentstatus !== "Paid") {
+    if (booking.paymentStatus !== "Paid") {
       return res.status(400).json({
         success: false,
         message: "Refund allowed only for paid bookings"
@@ -287,7 +287,7 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
     }
 
     // Trek date check
-    const trekDate = new Date(booking.eventdate);
+    const trekDate = new Date(booking.eventDate);
     const now = new Date();
 
     if (trekDate <= now) {
@@ -311,15 +311,15 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
-    const refund = await razorpay.payments.refund(paymentid, {
+    const refund = await razorpay.payments.refund(paymentId, {
       amount: amount * 100   // paisa
     });
     // Update booking
-    booking.bookingstatus = "Cancelled";
-    booking.refundstatus = "Refunded";
-    booking.paymentstatus = "Refunded";
-    booking.refundid = refund.id;
-    booking.refunddate = new Date();
+    booking.bookingStatus = "Cancelled";
+    booking.refundStatus = "Refunded";
+    booking.paymentStatus = "Refunded";
+    booking.refundId = refund.id;
+    booking.refundDate = new Date();
     await booking.save();
 
     //  upadte seats available
@@ -333,17 +333,17 @@ router.post('/cancel-refund', verifyToken, async (req, res) => {
       b => b.batchId === booking.batchCode
     );
 
-    if (batch.availableSeats + booking.noofpersons <= batch.totalSeats) {
-      batch.availableSeats += booking.noofpersons;
+    if (batch.availableSeats + booking.noOfPersons <= batch.totalSeats) {
+      batch.availableSeats += booking.noOfPersons;
       await trek.save();
     }
     //  forgot to send mail
     const htmlContent = `
         <h2>Booking Cancelled & Refund Initiated</h2>
-        <p>Hello ${booking.customername},</p>
-        <p>Your booking for <b>${booking.eventname}</b> has been cancelled successfully.</p>
-        <p><b>Booking ID:</b> ${booking.bookingid}</p>
-        <p><b>Trek Date:</b> ${new Date(booking.eventdate).toDateString()}</p>
+        <p>Hello ${booking.customerName},</p>
+        <p>Your booking for <b>${booking.eventName}</b> has been cancelled successfully.</p>
+        <p><b>Booking ID:</b> ${booking.bookingId}</p>
+        <p><b>Trek Date:</b> ${new Date(booking.eventDate).toDateString()}</p>
         <p><b>Refund Status:</b> Initiated</p>
         <p>Your refund has been initiated and will be credited to your original payment method within 5-7 business days.</p>
         <br/>
